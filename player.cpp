@@ -12,6 +12,7 @@
 #include "game.h"
 #include "rng.h"
 #include "net.h"
+#include "evalHandTables.h"
 
 
 /* TODO: implement your own poker strategy in this function!
@@ -29,13 +30,32 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   double probs[ NUM_ACTION_TYPES ];
   double actionProbs[ NUM_ACTION_TYPES ];
 
-  // TODO: check if 
+  // TODO: check if there is other variables to be added
+  uint8_t ID = state->viewingPlayer; // my player ID
+  uint8_t num_pub = 0; // number of public cards
+  const uint8_t num_pri = 2; // number of private cards
+  uint8_t card_pri[2]; // my cards
+  // initialize
+  for (size_t i = 0; i < 2; ++i) {
+    card_pri[i] = 13 * (state->state.holeCards[ID][i] % 4) + state->state.holeCards[ID][i] / 4;
+  }
+  uint8_t card_pub[5] = {0, 0, 0, 0, 0}; // public cards, first initialize to 0
+  uint8_t round = state->state.round; // current round of game
+  unsigned int pot = 0;
+  for (uint8_t i = 0; i < game->numPlayers; ++i) {
+    pot += state->state.spent[i];
+  }
 
-
-
+  // update public cards according to current cards
+  if (round > 0) {
+    for (uint8_t i = 0; i < round + 2; ++i) {
+      card_pub[i] = 13 * (state->state.boardCards[i] % 4) + state->state.boardCards[i] / 4;
+    }
+    num_pub = round + 2;
+  }
 
   /* Define the probabilities of actions for the player */
-  probs[ a_fold ] = 0.06;
+  probs[a_fold] = 0.06;
   probs[ a_call ] = ( 1.0 - probs[ a_fold ] ) * 0.5;
   probs[ a_raise ] = ( 1.0 - probs[ a_fold ] ) * 0.5;
 
@@ -94,7 +114,8 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   return action;
 }
 
-
+// TODO: implement a function to evaluate the winning rate given the current information
+double eval_win_rate(const uint8_t* card_pri, const uint8_t* card_pub, const uint8_t round, const)
 
 
 /* Anything related with socket is handled below. */
