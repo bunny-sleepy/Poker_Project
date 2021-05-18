@@ -14,6 +14,8 @@
 #include "net.h"
 #include "evalHandTables.h"
 
+double eval_win_rate(const uint8_t *card_pri, const uint8_t *card_pub, const uint8_t round);
+double eval_win_rate(Game *game, MatchState *state);
 
 /* TODO: implement your own poker strategy in this function!
  * 
@@ -35,13 +37,13 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   uint8_t num_pub = 0; // number of public cards
   const uint8_t num_pri = 2; // number of private cards
   uint8_t card_pri[2]; // my cards
-  // initialize
+  // initialize card_pri
   for (size_t i = 0; i < 2; ++i) {
-    card_pri[i] = 13 * (state->state.holeCards[ID][i] % 4) + state->state.holeCards[ID][i] / 4;
+    card_pri[i] = state->state.holeCards[ID][i];
   }
   uint8_t card_pub[5] = {0, 0, 0, 0, 0}; // public cards, first initialize to 0
   uint8_t round = state->state.round; // current round of game
-  unsigned int pot = 0;
+  unsigned int pot = 0; // current total pot value
   for (uint8_t i = 0; i < game->numPlayers; ++i) {
     pot += state->state.spent[i];
   }
@@ -49,7 +51,7 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   // update public cards according to current cards
   if (round > 0) {
     for (uint8_t i = 0; i < round + 2; ++i) {
-      card_pub[i] = 13 * (state->state.boardCards[i] % 4) + state->state.boardCards[i] / 4;
+      card_pub[i] = state->state.boardCards[i];
     }
     num_pub = round + 2;
   }
@@ -115,8 +117,48 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
 }
 
 // TODO: implement a function to evaluate the winning rate given the current information
-double eval_win_rate(const uint8_t* card_pri, const uint8_t* card_pub, const uint8_t round, const)
+double eval_win_rate(const uint8_t* card_pri, const uint8_t* card_pub, const uint8_t round) {
+  uint8_t num_pub = (round > 0) ? (round + 2) : 0; // number of public cards
+  Cardset cardset_pri, cardset_oppo;
+  // addCardToCardset(&cardset_pri, card_pri[]
+}
 
+double eval_win_rate(Game *game, MatchState *state) {
+  const uint8_t num_pub = (state->state.round > 0) ? (state->state.round + 2) : 0; // number of public cards
+  Cardset cardset_pri, cardset_oppo;
+  const uint8_t ID = state->viewingPlayer;
+  bool card_use_flag[52] = {0};
+  // the total number of guesses and wins
+  size_t tot = 0, win = 0;
+  uint8_t curr_card_num = num_pub;
+
+  // init current info to the cardsets
+  addCardToCardset(&cardset_pri, state->state.holeCards[ID][0] % 4, state->state.holeCards[ID][0] / 4);
+  addCardToCardset(&cardset_pri, state->state.holeCards[ID][1] % 4, state->state.holeCards[ID][1] / 4);
+  card_use_flag[state->state.holeCards[ID][0]] = 1;
+  card_use_flag[state->state.holeCards[ID][1]] = 1;
+  for (uint8_t i = 0; i < num_pub; ++i) {
+    addCardToCardset(&cardset_pri, state->state.boardCards[i] % 4, state->state.holeCards[i] / 4);
+    addCardToCardset(&cardset_oppo, state->state.boardCards[i] % 4, state->state.holeCards[i] / 4);
+    card_use_flag[state->state.boardCards[i]] = 1;
+  }
+
+  // make guesses
+  for (uint8_t oppo1 = 0; oppo1 < 52; ++oppo1) {
+    if (card_use_flag[oppo1]) continue;
+    card_use_flag[oppo1] = 1;
+    for (uint8_t oppo2 = 0; oppo2 < 52; ++oppo2) {
+      if (card_use_flag[oppo2]) continue;
+      card_use_flag[oppo2] = 1;
+      // dfs for the remaining public cards
+      while (true) {
+        for (uint8_t )
+      }
+      card_use_flag[oppo2] = 0;
+    }
+    card_use_flag[oppo1] = 0;
+  }
+}
 
 /* Anything related with socket is handled below. */
 /* If you are not interested with protocol details, you can safely skip these. */
