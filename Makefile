@@ -13,5 +13,5 @@ clean_log:
 dealer: game.cpp game.h evalHandTables.h rng.cpp rng.h dealer.cpp net.cpp net.h
 	$(CXX) -o $@ game.cpp rng.cpp dealer.cpp net.cpp
 
-example_player: game.cpp game.h evalHandTables.h rng.cpp rng.h player.cpp net.cpp net.h
+example_player: game.cpp game.h evalHandTables.h rng.cpp rng.h player.cpp player.h net.cpp net.h
 	$(CXX) -o $@ game.cpp rng.cpp player.cpp net.cpp

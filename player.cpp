@@ -1,21 +1,8 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <assert.h>
-#include <string.h>
-#include <unistd.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <getopt.h>
-#include "game.h"
-#include "rng.h"
-#include "net.h"
-#include "evalHandTables.h"
+#include "player.h"
 
 double eval_win_rate(const uint8_t *card_pri, const uint8_t *card_pub, const uint8_t round);
 double eval_win_rate(Game *game, MatchState *state);
+prob_act eval_strategy(Game *game, MatchState *state, double win_rate);
 
 /* TODO: implement your own poker strategy in this function!
  * 
@@ -55,7 +42,8 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
     }
     num_pub = round + 2;
   }
-
+  // the win_rate
+  double win_rate = eval_win_rate(game, state);
   /* Define the probabilities of actions for the player */
   probs[a_fold] = 0.06;
   probs[ a_call ] = ( 1.0 - probs[ a_fold ] ) * 0.5;
@@ -123,6 +111,7 @@ double eval_win_rate(const uint8_t* card_pri, const uint8_t* card_pub, const uin
   // addCardToCardset(&cardset_pri, card_pri[]
 }
 
+// TODO: check pre_flop prob.
 double pre_flop_win_rate[13][13] = {{0.85, 0.68, 0.67, 0.66, 0.66, 0.64, 0.63, 0.63, 0.62, 0.62, 0.61, 0.60, 0.59},
                                     {0.66, 0.83, 0.64, 0.64, 0.63, 0.61, 0.60, 0.59, 0.58, 0.58, 0.57, 0.56, 0.55},
                                     {0.65, 0.62, 0.80, 0.61, 0.61, 0.59, 0.58, 0.56, 0.55, 0.55, 0.54, 0.53, 0.52},
@@ -135,7 +124,7 @@ double pre_flop_win_rate[13][13] = {{0.85, 0.68, 0.67, 0.66, 0.66, 0.64, 0.63, 0
                                     {0.60, 0.55, 0.52, 0.49, 0.47, 0.45, 0.44, 0.43, 0.43, 0.61, 0.44, 0.43, 0.41},
                                     {0.59, 0.54, 0.51, 0.48, 0.46, 0.43, 0.42, 0.41, 0.41, 0.41, 0.58, 0.42, 0.40},
                                     {0.58, 0.54, 0.50, 0.48, 0.45, 0.43, 0.40, 0.39, 0.39, 0.39, 0.38, 0.55, 0.39},
-                                    {0.57, 0.53, 0.49, 0.47, 0.44, 0.42, 0.40, 0.37, 0.37, 0.37, 0.36, 0.35, 0.51}}
+                                    {0.57, 0.53, 0.49, 0.47, 0.44, 0.42, 0.40, 0.37, 0.37, 0.37, 0.36, 0.35, 0.51}};
 
 // eval win rate
 double eval_win_rate(Game *game, MatchState *state) {
@@ -143,11 +132,33 @@ double eval_win_rate(Game *game, MatchState *state) {
   const uint8_t ID = state->viewingPlayer;
   bool card_use_flag[52] = {0};
   // the total number of guesses and wins
-  size_t tot = 0, win = 0;
+  long long unsigned tot = 0, win = 0;
   uint8_t curr_card_num = num_pub;
   // init current info to the cardsets
-  card_use_flag[state->state.holeCards[ID][0]] = 1;
-  card_use_flag[state->state.holeCards[ID][1]] = 1;
+  uint8_t pri1 = state->state.holeCards[ID][0], pri2 = state->state.holeCards[ID][1];
+  card_use_flag[pri1] = 1;
+  card_use_flag[pri2] = 1;
+  
+  // pre-flop
+  if (state->state.round == 0) {
+    if (pri1 / 4 == pri2 / 4) {
+      return pre_flop_win_rate[12 - pri1 / 4][12 - pri1 / 4];
+    } else if (pri1 % 4 == pri2 % 4) {
+      if (pri1 / 4 < pri2 / 4) {
+        return pre_flop_win_rate[12 - pri2 / 4][12 - pri1 / 4];
+      } else {
+        return pre_flop_win_rate[12 - pri1 / 4][12 - pri2 / 4];
+      }
+    } else {
+      if (pri1 / 4 > pri2 / 4) {
+        return pre_flop_win_rate[12 - pri2 / 4][12 - pri1 / 4];
+      } else {
+        return pre_flop_win_rate[12 - pri1 / 4][12 - pri2 / 4];
+      }
+    }
+  }
+  
+  // not pre-flop
   for (uint8_t i = 0; i < num_pub; ++i) {
     card_use_flag[state->state.boardCards[i]] = 1;
   }
@@ -169,8 +180,8 @@ double eval_win_rate(Game *game, MatchState *state) {
           card_use_flag[pub2] = 1;
           // init current info to the cardsets
           Cardset cardset_pri, cardset_oppo;
-          addCardToCardset(&cardset_pri, state->state.holeCards[ID][0] % 4, state->state.holeCards[ID][0] / 4);
-          addCardToCardset(&cardset_pri, state->state.holeCards[ID][1] % 4, state->state.holeCards[ID][1] / 4);
+          addCardToCardset(&cardset_pri, pri1 % 4, pri1 / 4);
+          addCardToCardset(&cardset_pri, pri2 % 4, pri2 / 4);
           for (uint8_t i = 0; i < num_pub; ++i) {
             addCardToCardset(&cardset_pri, state->state.boardCards[i] % 4, state->state.boardCards[i] / 4);
             addCardToCardset(&cardset_oppo, state->state.boardCards[i] % 4, state->state.boardCards[i] / 4);
@@ -189,8 +200,8 @@ double eval_win_rate(Game *game, MatchState *state) {
           tot++;
           // init current info to the cardsets
           Cardset cardset_pri, cardset_oppo;
-          addCardToCardset(&cardset_pri, state->state.holeCards[ID][0] % 4, state->state.holeCards[ID][0] / 4);
-          addCardToCardset(&cardset_pri, state->state.holeCards[ID][1] % 4, state->state.holeCards[ID][1] / 4);
+          addCardToCardset(&cardset_pri, pri1 % 4, pri1 / 4);
+          addCardToCardset(&cardset_pri, pri2 % 4, pri2 / 4);
           for (uint8_t i = 0; i < num_pub; ++i) {
             addCardToCardset(&cardset_pri, state->state.boardCards[i] % 4, state->state.boardCards[i] / 4);
             addCardToCardset(&cardset_oppo, state->state.boardCards[i] % 4, state->state.boardCards[i] / 4);
@@ -207,8 +218,8 @@ double eval_win_rate(Game *game, MatchState *state) {
         tot++;
         // init current info to the cardsets
         Cardset cardset_pri, cardset_oppo;
-        addCardToCardset(&cardset_pri, state->state.holeCards[ID][0] % 4, state->state.holeCards[ID][0] / 4);
-        addCardToCardset(&cardset_pri, state->state.holeCards[ID][1] % 4, state->state.holeCards[ID][1] / 4);
+        addCardToCardset(&cardset_pri, pri1 % 4, pri1 / 4);
+        addCardToCardset(&cardset_pri, pri2 % 4, pri2 / 4);
         for (uint8_t i = 0; i < num_pub; ++i) {
           addCardToCardset(&cardset_pri, state->state.boardCards[i] % 4, state->state.boardCards[i] / 4);
           addCardToCardset(&cardset_oppo, state->state.boardCards[i] % 4, state->state.boardCards[i] / 4);
