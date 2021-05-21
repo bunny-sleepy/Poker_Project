@@ -22,6 +22,10 @@ typedef struct {
   double prob_call = 0.0;
   double prob_raise = 0.0;
   double raise_size;
-} prob_act;
+} ProbAct;
+
+double eval_win_rate(const uint8_t *card_pri, const uint8_t *card_pub, const uint8_t round);
+double eval_win_rate(Game *game, MatchState *state);
+ProbAct eval_strategy(Game *game, MatchState *state, double win_rate);
 
 #endif // _PLAYER_H_

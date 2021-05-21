@@ -1,9 +1,5 @@
 #include "player.h"
 
-double eval_win_rate(const uint8_t *card_pri, const uint8_t *card_pub, const uint8_t round);
-double eval_win_rate(Game *game, MatchState *state);
-prob_act eval_strategy(Game *game, MatchState *state, double win_rate);
-
 /* TODO: implement your own poker strategy in this function!
  * 
  * The function is called when it is the agent's turn to play!
@@ -30,10 +26,6 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   }
   uint8_t card_pub[5] = {0, 0, 0, 0, 0}; // public cards, first initialize to 0
   uint8_t round = state->state.round; // current round of game
-  unsigned int pot = 0; // current total pot value
-  for (uint8_t i = 0; i < game->numPlayers; ++i) {
-    pot += state->state.spent[i];
-  }
 
   // update public cards according to current cards
   if (round > 0) {
@@ -45,9 +37,10 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   // the win_rate
   double win_rate = eval_win_rate(game, state);
   /* Define the probabilities of actions for the player */
-  probs[a_fold] = 0.06;
-  probs[ a_call ] = ( 1.0 - probs[ a_fold ] ) * 0.5;
-  probs[ a_raise ] = ( 1.0 - probs[ a_fold ] ) * 0.5;
+  ProbAct prob_act = eval_strategy(game, state, win_rate);
+  probs[a_fold] = prob_act.prob_fold;
+  probs[ a_call ] = prob_act.prob_call;
+  probs[ a_raise ] = prob_act.prob_raise;
 
   /* build the set of valid actions */
   double p = 0.0;
@@ -95,20 +88,13 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   action.type = (enum ActionType)a;
   if( a == a_raise ) {
     // TODO: check if raise size < min
-    action.size = min + genrand_int32( rng ) % ( max - min + 1 );
+    action.size = min + genrand_int32( rng ) % ( max - min + 1 ); // this is a random raise
   }
   else {
     action.size = 0;
   }
 
   return action;
-}
-
-// TODO: implement a function to evaluate the winning rate given the current information
-double eval_win_rate(const uint8_t* card_pri, const uint8_t* card_pub, const uint8_t round) {
-  uint8_t num_pub = (round > 0) ? (round + 2) : 0; // number of public cards
-  Cardset cardset_pri, cardset_oppo;
-  // addCardToCardset(&cardset_pri, card_pri[]
 }
 
 // TODO: check pre_flop prob.
@@ -126,7 +112,7 @@ double pre_flop_win_rate[13][13] = {{0.85, 0.68, 0.67, 0.66, 0.66, 0.64, 0.63, 0
                                     {0.58, 0.54, 0.50, 0.48, 0.45, 0.43, 0.40, 0.39, 0.39, 0.39, 0.38, 0.55, 0.39},
                                     {0.57, 0.53, 0.49, 0.47, 0.44, 0.42, 0.40, 0.37, 0.37, 0.37, 0.36, 0.35, 0.51}};
 
-// eval win rate
+// TODO: check eval win rate
 double eval_win_rate(Game *game, MatchState *state) {
   const uint8_t num_pub = (state->state.round > 0) ? (state->state.round + 2) : 0; // number of public cards
   const uint8_t ID = state->viewingPlayer;
@@ -234,6 +220,21 @@ double eval_win_rate(Game *game, MatchState *state) {
     card_use_flag[oppo1] = 0;
   }
   return double(win) / double(tot);
+}
+
+// TODO: check strategy
+ProbAct eval_strategy(Game *game, MatchState *state, double win_rate) {
+  ProbAct prob_act;
+  unsigned int pot = 0; // current total pot value
+  for (uint8_t i = 0; i < game->numPlayers; ++i) {
+    pot += state->state.spent[i];
+  }
+  if (state->state.round == 0) {
+    
+  }
+  assert(prob_act.prob_call + prob_act.prob_fold + prob_act.prob_raise - 1.0 > -1e-10);
+  assert(prob_act.prob_call + prob_act.prob_fold + prob_act.prob_raise - 1.0 < 1e-10);
+  return prob_act;
 }
 
 /* Anything related with socket is handled below. */
