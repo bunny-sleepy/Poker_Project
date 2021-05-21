@@ -37,7 +37,7 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   // the win_rate
   double win_rate = eval_win_rate(game, state);
   /* Define the probabilities of actions for the player */
-  ProbAct prob_act = eval_strategy(game, state, win_rate);
+  ProbAct prob_act = eval_strategy(game, state, win_rate, rng);
   probs[a_fold] = prob_act.prob_fold;
   probs[ a_call ] = prob_act.prob_call;
   probs[ a_raise ] = prob_act.prob_raise;
@@ -223,14 +223,43 @@ double eval_win_rate(Game *game, MatchState *state) {
 }
 
 // TODO: check strategy
-ProbAct eval_strategy(Game *game, MatchState *state, double win_rate) {
+ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_t *rng) {
   ProbAct prob_act;
   unsigned int pot = 0; // current total pot value
   for (uint8_t i = 0; i < game->numPlayers; ++i) {
     pot += state->state.spent[i];
   }
   if (state->state.round == 0) {
-    
+    // TODO: adjust the values
+    const double fold_threshold_pre_flop = 0.50;
+    const double raise_threshold_pre_flop = 0.60;
+    // fold if win rate too low
+    if (win_rate <= fold_threshold_pre_flop) {
+      Action action;
+      action.type = a_fold;
+      action.size = 0;
+      if (isValidAction(game, &(state->state), 0, &action)) {
+        prob_act.prob_call = 0.2;
+        prob_act.prob_fold = 0.8;
+        prob_act.prob_raise = 0.0;
+      } else { // call if not able to fold
+        prob_act.prob_call = 1.0;
+        prob_act.prob_fold = 0.0;
+        prob_act.prob_raise = 0.0;
+      }
+    } else if (win_rate > raise_threshold_pre_flop) { // place a raise if we do not fold
+      // consider raise
+      int32_t min, max;
+      if (raiseIsValid(game, &(state->state), &min, &max)) {
+        prob_act.prob_call = 0.0;
+        prob_act.prob_fold = 0.0;
+        prob_act.prob_raise = 1.0;
+        // choose raise value w.r.t pot and win rate at random (uniform)
+        double rand_num = double(genrand_int32(rng)) / 0xffffffff;
+      }
+    } else {
+
+    }
   }
   assert(prob_act.prob_call + prob_act.prob_fold + prob_act.prob_raise - 1.0 > -1e-10);
   assert(prob_act.prob_call + prob_act.prob_fold + prob_act.prob_raise - 1.0 < 1e-10);
@@ -264,8 +293,7 @@ int step(int len, char line[], Game *game, MatchState *state, rng_state_t *rng) 
 }
 
 
-int main( int argc, char **argv )
-{
+int main( int argc, char **argv ) {
   int sock, len;
   uint16_t port;
   Game *game;
