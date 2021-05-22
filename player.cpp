@@ -39,22 +39,22 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   /* Define the probabilities of actions for the player */
   ProbAct prob_act = eval_strategy(game, state, win_rate, rng);
   probs[a_fold] = prob_act.prob_fold;
-  probs[ a_call ] = prob_act.prob_call;
-  probs[ a_raise ] = prob_act.prob_raise;
+  probs[ a_call] = prob_act.prob_call;
+  probs[a_raise] = prob_act.prob_raise;
 
   /* build the set of valid actions */
   double p = 0.0;
   int a;
   for( a = 0; a < NUM_ACTION_TYPES; ++a ) {
-    actionProbs[ a ] = 0.0;
+    actionProbs[a] = 0.0;
   }
 
   /* consider fold */
   action.type = a_fold;
   action.size = 0;
   if( isValidAction( game, &(state->state), 0, &action ) ) {
-    actionProbs[ a_fold ] = probs[ a_fold ];
-    p += probs[ a_fold ];
+    actionProbs[a_fold] = probs[a_fold];
+    p += probs[a_fold];
   }
 
   /* consider call */
@@ -88,7 +88,7 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   action.type = (enum ActionType)a;
   if( a == a_raise ) {
     // TODO: check if raise size < min
-    action.size = min + genrand_int32( rng ) % ( max - min + 1 ); // this is a random raise
+    action.size = prob_act.raise_size; // this is a random raise
   }
   else {
     action.size = 0;
@@ -157,15 +157,14 @@ double eval_win_rate(Game *game, MatchState *state) {
       card_use_flag[oppo2] = 1;
       // dfs for the remaining public cards
       if (state->state.round <= 2) for (uint8_t pub1 = 0; pub1 < 52; ++pub1) {
-        if (card_use_flag[pub1])
-          continue;
+        if (card_use_flag[pub1]) continue;
         card_use_flag[pub1] = 1;
         if (state->state.round <= 1) for (uint8_t pub2 = 0; pub2 < 52; ++pub2) {
           if (card_use_flag[pub2]) continue;
           tot++;
           card_use_flag[pub2] = 1;
           // init current info to the cardsets
-          Cardset cardset_pri, cardset_oppo;
+          Cardset cardset_pri = emptyCardset(), cardset_oppo = emptyCardset();
           addCardToCardset(&cardset_pri, pri1 % 4, pri1 / 4);
           addCardToCardset(&cardset_pri, pri2 % 4, pri2 / 4);
           for (uint8_t i = 0; i < num_pub; ++i) {
@@ -185,7 +184,7 @@ double eval_win_rate(Game *game, MatchState *state) {
         } else {
           tot++;
           // init current info to the cardsets
-          Cardset cardset_pri, cardset_oppo;
+          Cardset cardset_pri = emptyCardset(), cardset_oppo = emptyCardset();
           addCardToCardset(&cardset_pri, pri1 % 4, pri1 / 4);
           addCardToCardset(&cardset_pri, pri2 % 4, pri2 / 4);
           for (uint8_t i = 0; i < num_pub; ++i) {
@@ -203,7 +202,7 @@ double eval_win_rate(Game *game, MatchState *state) {
       } else {
         tot++;
         // init current info to the cardsets
-        Cardset cardset_pri, cardset_oppo;
+        Cardset cardset_pri = emptyCardset(), cardset_oppo = emptyCardset();
         addCardToCardset(&cardset_pri, pri1 % 4, pri1 / 4);
         addCardToCardset(&cardset_pri, pri2 % 4, pri2 / 4);
         for (uint8_t i = 0; i < num_pub; ++i) {
@@ -219,7 +218,7 @@ double eval_win_rate(Game *game, MatchState *state) {
     }
     card_use_flag[oppo1] = 0;
   }
-  return double(win) / double(tot);
+  return (tot == 0.0) ? 0.0 : double(win) / double(tot);
 }
 
 // TODO: check strategy
@@ -229,6 +228,7 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
   for (uint8_t i = 0; i < game->numPlayers; ++i) {
     pot += state->state.spent[i];
   }
+  // pre-flop strategy
   if (state->state.round == 0) {
     // TODO: adjust the values
     const double fold_threshold_pre_flop = 0.50;
@@ -239,6 +239,7 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
       action.type = a_fold;
       action.size = 0;
       if (isValidAction(game, &(state->state), 0, &action)) {
+        // TODO: adjust according to opponent's bet
         prob_act.prob_call = 0.2;
         prob_act.prob_fold = 0.8;
         prob_act.prob_raise = 0.0;
@@ -247,7 +248,7 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
         prob_act.prob_fold = 0.0;
         prob_act.prob_raise = 0.0;
       }
-    } else if (win_rate > raise_threshold_pre_flop) { // place a raise if we do not fold
+    } else if (win_rate > raise_threshold_pre_flop) { // place a raise if we have high win prob
       // consider raise
       int32_t min, max;
       if (raiseIsValid(game, &(state->state), &min, &max)) {
@@ -255,11 +256,84 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
         prob_act.prob_fold = 0.0;
         prob_act.prob_raise = 1.0;
         // choose raise value w.r.t pot and win rate at random (uniform)
-        double rand_num = double(genrand_int32(rng)) / 0xffffffff;
+        double rand_num = genrand_real2(rng);
+        // TODO: adjust raise size
+        prob_act.raise_size = ((min + int32_t(rand_num * pot * (2 - exp((1 - win_rate))))) < max) ? (min + int32_t(rand_num * pot * (2 - exp(1 - win_rate)))) : max;
+      } else {
+        prob_act.prob_call = 1.0;
+        prob_act.prob_fold = 0.0;
+        prob_act.prob_raise = 0.0;
       }
-    } else {
-
+    } else { // intermediate values
+      int32_t min, max;
+      if (raiseIsValid(game, &(state->state), &min, &max)) {
+        Action action;
+        action.type = a_fold;
+        action.size = 0;
+        if (isValidAction(game, &(state->state), 0, &action)) { // fold is valid
+          prob_act.prob_fold = 1 / (1 + 2 * exp(win_rate));
+          prob_act.prob_raise = 3 * exp(win_rate) * win_rate / (1 + 2 * exp(win_rate));
+          prob_act.prob_call = 1.0 - prob_act.prob_fold - prob_act.prob_raise;
+        } else {
+          prob_act.prob_fold = 0;
+          prob_act.prob_raise = exp(win_rate - 2.0);
+          prob_act.prob_call = 1.0 - prob_act.prob_raise;
+        }
+        // choose raise value w.r.t pot and win rate at random (uniform)
+        double rand_num =  genrand_real2(rng);
+        // TODO: adjust raise size
+        prob_act.raise_size = (min + int32_t(rand_num * pot * (2 - exp((1 - win_rate)))) < max) ? (min + int32_t(rand_num * pot * (2 - exp(1 - win_rate)))) : max;
+      } else {
+        Action action;
+        action.type = a_fold;
+        action.size = 0;
+        if (isValidAction(game, &(state->state), 0, &action)) { // fold is valid
+          prob_act.prob_call = 1.0;
+          prob_act.prob_fold = 0.0;
+          prob_act.prob_raise = 0.0;
+        } else {
+          prob_act.prob_call = 1.0;
+          prob_act.prob_fold = 0.0;
+          prob_act.prob_raise = 0.0;
+        }
+      }
     }
+  } else { // after flop
+    int32_t min, max;
+    if (raiseIsValid(game, &(state->state), &min, &max)) {
+      Action action;
+      action.type = a_fold;
+      action.size = 0;
+      if (isValidAction(game, &(state->state), 0, &action)) { // fold is valid
+        prob_act.prob_fold = 1 / (1 + 2 * exp(win_rate));
+        prob_act.prob_raise = 3 * exp(win_rate) * win_rate / (1 + 2 * exp(win_rate));
+        prob_act.prob_call = 1.0 - prob_act.prob_fold - prob_act.prob_raise;
+      } else {
+        prob_act.prob_fold = 0.0;
+        prob_act.prob_raise = exp(win_rate - 2.0);
+        prob_act.prob_call = 1.0 - prob_act.prob_raise;
+      }
+      // choose raise value w.r.t pot and win rate at random (uniform)
+      double rand_num =  genrand_real2(rng);
+      // TODO: adjust raise size
+      prob_act.raise_size = (min + int32_t(rand_num * pot * (2 - exp((1 - win_rate)))) < max) ? (min + int32_t(rand_num * pot * (2 - exp(1 - win_rate)))) : max;
+    } else { // raise is not valid
+      Action action;
+      action.type = a_fold;
+      action.size = 0;
+      if (isValidAction(game, &(state->state), 0, &action)) { // fold is valid
+        prob_act.prob_call = 1.0;
+        prob_act.prob_fold = 0.0;
+        prob_act.prob_raise = 0.0;
+      } else {
+        prob_act.prob_call = 1.0;
+        prob_act.prob_fold = 0.0;
+        prob_act.prob_raise = 0.0;
+      }
+    }
+    // prob_act.prob_call = 1.0;
+    //     prob_act.prob_fold = 0.0;
+    //     prob_act.prob_raise = 0.0;
   }
   assert(prob_act.prob_call + prob_act.prob_fold + prob_act.prob_raise - 1.0 > -1e-10);
   assert(prob_act.prob_call + prob_act.prob_fold + prob_act.prob_raise - 1.0 < 1e-10);
