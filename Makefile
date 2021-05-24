@@ -1,6 +1,6 @@
 CXX = g++
 
-PROGRAMS = dealer example_player player test
+PROGRAMS = dealer example_player player train
 
 all: $(PROGRAMS)
 
@@ -19,5 +19,8 @@ player: game.cpp game.h evalHandTables.h rng.cpp rng.h player.cpp player.h net.c
 example_player: game.cpp game.h evalHandTables.h rng.cpp rng.h example_player.cpp player.h net.cpp net.h
 	$(CXX) -o $@ game.cpp rng.cpp example_player.cpp net.cpp
 
-test: game.cpp game.h evalHandTables.h rng.cpp rng.h test.cpp player.h net.cpp net.h
-	$(CXX) -o $@ game.cpp rng.cpp test.cpp net.cpp
+# test: game.cpp game.h evalHandTables.h rng.cpp rng.h test.cpp player.h net.cpp net.h
+# 	$(CXX) -o $@ game.cpp rng.cpp test.cpp net.cpp
+
+train: game.cpp game.h evalHandTables.h rng.cpp rng.h cfr.cpp cfr.h net.cpp net.h
+	$(CXX) -o $@ game.cpp rng.cpp cfr.cpp net.cpp
