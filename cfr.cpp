@@ -1,17 +1,21 @@
 #include "cfr.h"
+#include <string>
 
-double externalSamplingCFR(Game *game, MatchState *state, uint_8 player_idx) {
+double Trainer::externalSamplingCFR(Game *game, MatchState *state, uint8_t playerIdx) {
   if (game_done()) {
     return payoff();
   }
-
+  std::string infoSet;
+  const int actionNum = game->actionNum();
+  const uint8_t player = state->state.actingPlayer;
+  
 }
 
-void train(const size_t iterations) {
+void Trainer::train(const size_t iterations) {
   return;
 }
 
-void writeStrategy(const size_t iterations) {
+void Trainer::writeStrategy(const size_t iterations) const {
   return;
 }
 

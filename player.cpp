@@ -252,6 +252,7 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
       // consider raise
       int32_t min, max;
       if (raiseIsValid(game, &(state->state), &min, &max)) {
+        printf("%d", min);
         prob_act.prob_call = 0.0;
         prob_act.prob_fold = 0.0;
         prob_act.prob_raise = 1.0;
