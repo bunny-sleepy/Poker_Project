@@ -22,6 +22,7 @@ int main() {
   addCardToCardset(&cardset_2, 0, 6);
   // cout << rankCardset(cardset_1) << endl;
   cout << rankCardset(cardset_2) << endl;
+  cardset_2 = emptyCardset();
   bool card_use_flag[52] = {0};
   uint32_t tot = 0, win = 0;
   uint8_t pri1 = 25, pri2 = 38;

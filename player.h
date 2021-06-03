@@ -25,8 +25,16 @@ typedef struct {
   double raise_size;
 } ProbAct;
 
-double eval_win_rate(const uint8_t *card_pri, const uint8_t *card_pub, const uint8_t round);
-double eval_win_rate(Game *game, MatchState *state);
+// evaluates opponent's win rate
+double eval_dist_oppo(double prob_oppo[52][52], Game *game, MatchState *state);
+
+// evaluates uniform win rate
+double eval_win_rate_uniform(Game *game, MatchState *state);
+
+// evaluate win rate with opponent's action
+double eval_win_rate_with_belief(double prob_oppo[52][52], Game *game, MatchState *state);
+
+// generate strategy
 ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_t *rng);
 
 #endif // _PLAYER_H_

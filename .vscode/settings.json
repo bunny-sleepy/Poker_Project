@@ -2,6 +2,11 @@
   "files.associations": {
     "ostream": "cpp",
     "map": "cpp",
-    "unordered_map": "cpp"
+    "unordered_map": "cpp",
+    "array": "cpp",
+    "istream": "cpp",
+    "tuple": "cpp",
+    "type_traits": "cpp",
+    "utility": "cpp"
   }
 }

@@ -35,12 +35,12 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
     num_pub = round + 2;
   }
   // the win_rate
-  double win_rate = eval_win_rate(game, state);
+  double win_rate = eval_win_rate_uniform(game, state);
   /* Define the probabilities of actions for the player */
   ProbAct prob_act = eval_strategy(game, state, win_rate, rng);
-  probs[a_fold] = prob_act.prob_fold;
-  probs[ a_call] = prob_act.prob_call;
-  probs[a_raise] = prob_act.prob_raise;
+  probs[ a_fold ] = prob_act.prob_fold;
+  probs[ a_call ] = prob_act.prob_call;
+  probs[ a_raise ] = prob_act.prob_raise;
 
   /* build the set of valid actions */
   double p = 0.0;
@@ -113,7 +113,7 @@ double pre_flop_win_rate[13][13] = {{0.85, 0.68, 0.67, 0.66, 0.66, 0.64, 0.63, 0
                                     {0.57, 0.53, 0.49, 0.47, 0.44, 0.42, 0.40, 0.37, 0.37, 0.37, 0.36, 0.35, 0.51}};
 
 // TODO: check eval win rate
-double eval_win_rate(Game *game, MatchState *state) {
+double eval_win_rate_uniform(Game *game, MatchState *state) {
   const uint8_t num_pub = (state->state.round > 0) ? (state->state.round + 2) : 0; // number of public cards
   const uint8_t ID = state->viewingPlayer;
   bool card_use_flag[52] = {0};
