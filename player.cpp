@@ -36,11 +36,12 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   }
   // the win_rate
   double win_rate = eval_win_rate_uniform(game, state);
+  double win_rate_with_belief = eval_win_rate_with_belief(prob_oppo[52][52], game, state);
   /* Define the probabilities of actions for the player */
   ProbAct prob_act = eval_strategy(game, state, win_rate, rng);
-  probs[ a_fold ] = prob_act.prob_fold;
-  probs[ a_call ] = prob_act.prob_call;
-  probs[ a_raise ] = prob_act.prob_raise;
+  probs[a_fold] = prob_act.prob_fold;
+  probs[a_call] = prob_act.prob_call;
+  probs[a_raise] = prob_act.prob_raise;
 
   /* build the set of valid actions */
   double p = 0.0;
@@ -89,6 +90,11 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   if( a == a_raise ) {
     // TODO: check if raise size < min
     action.size = prob_act.raise_size; // this is a random raise
+    if (action.size > max) {
+      action.size = max;
+    } else if (action.size < min) {
+      action.size = min;
+    }
   }
   else {
     action.size = 0;
@@ -252,14 +258,13 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
       // consider raise
       int32_t min, max;
       if (raiseIsValid(game, &(state->state), &min, &max)) {
-        printf("%d", min);
         prob_act.prob_call = 0.0;
         prob_act.prob_fold = 0.0;
         prob_act.prob_raise = 1.0;
         // choose raise value w.r.t pot and win rate at random (uniform)
         double rand_num = genrand_real2(rng);
         // TODO: adjust raise size
-        prob_act.raise_size = ((min + int32_t(rand_num * pot * (2 - exp((1 - win_rate))))) < max) ? (min + int32_t(rand_num * pot * (2 - exp(1 - win_rate)))) : max;
+        prob_act.raise_size = ((min + int32_t(rand_num * pot * exp(win_rate) * 3)) < max) ? (min + int32_t(rand_num * pot * exp(win_rate) * 3)) : max;
       } else {
         prob_act.prob_call = 1.0;
         prob_act.prob_fold = 0.0;
@@ -273,7 +278,7 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
         action.size = 0;
         if (isValidAction(game, &(state->state), 0, &action)) { // fold is valid
           prob_act.prob_fold = 1 / (1 + 2 * exp(win_rate));
-          prob_act.prob_raise = 3 * exp(win_rate) * win_rate / (1 + 2 * exp(win_rate));
+          prob_act.prob_raise = 2 * exp(win_rate) * win_rate / (1 + 2 * exp(win_rate));
           prob_act.prob_call = 1.0 - prob_act.prob_fold - prob_act.prob_raise;
         } else {
           prob_act.prob_fold = 0;
@@ -283,7 +288,7 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
         // choose raise value w.r.t pot and win rate at random (uniform)
         double rand_num =  genrand_real2(rng);
         // TODO: adjust raise size
-        prob_act.raise_size = (min + int32_t(rand_num * pot * (2 - exp((1 - win_rate)))) < max) ? (min + int32_t(rand_num * pot * (2 - exp(1 - win_rate)))) : max;
+        prob_act.raise_size = (min + int32_t(rand_num * pot * exp(win_rate) * 3) < max) ? (min + int32_t(rand_num * pot * exp(win_rate) * 3)) : max;
       } else {
         Action action;
         action.type = a_fold;
@@ -307,7 +312,7 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
       action.size = 0;
       if (isValidAction(game, &(state->state), 0, &action)) { // fold is valid
         prob_act.prob_fold = 1 / (1 + 2 * exp(win_rate));
-        prob_act.prob_raise = 3 * exp(win_rate) * win_rate / (1 + 2 * exp(win_rate));
+        prob_act.prob_raise = 2 * exp(win_rate) * win_rate / (1 + 2 * exp(win_rate));
         prob_act.prob_call = 1.0 - prob_act.prob_fold - prob_act.prob_raise;
       } else {
         prob_act.prob_fold = 0.0;
@@ -317,7 +322,7 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
       // choose raise value w.r.t pot and win rate at random (uniform)
       double rand_num =  genrand_real2(rng);
       // TODO: adjust raise size
-      prob_act.raise_size = (min + int32_t(rand_num * pot * (2 - exp((1 - win_rate)))) < max) ? (min + int32_t(rand_num * pot * (2 - exp(1 - win_rate)))) : max;
+      prob_act.raise_size = (min + int32_t(rand_num * pot * exp(win_rate) * 3) < max) ? (min + int32_t(rand_num * pot * exp(win_rate) * 3)) : max;
     } else { // raise is not valid
       Action action;
       action.type = a_fold;
@@ -332,9 +337,6 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
         prob_act.prob_raise = 0.0;
       }
     }
-    // prob_act.prob_call = 1.0;
-    //     prob_act.prob_fold = 0.0;
-    //     prob_act.prob_raise = 0.0;
   }
   assert(prob_act.prob_call + prob_act.prob_fold + prob_act.prob_raise - 1.0 > -1e-10);
   assert(prob_act.prob_call + prob_act.prob_fold + prob_act.prob_raise - 1.0 < 1e-10);

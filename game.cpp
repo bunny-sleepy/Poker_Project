@@ -639,6 +639,14 @@ void initState( const Game *game, const uint32_t handId, State *state )
   state->round = 0;
 
   state->finished = 0;
+  for (uint8_t i = 0; i < 52; i++) {
+    for (uint8_t j = 0; j < 52; j++) {
+      if (i != j)
+        state->prob_oppo[i][j] = (1.0 / 52) / 51;
+      else
+        state->prob_oppo[i][j] = 0;
+    }
+  }
 }
 
 static uint8_t dealCard( rng_state_t *rng, uint8_t *deck, const int numCards )

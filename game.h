@@ -113,6 +113,9 @@ typedef struct {
 
   /* private cards */
   uint8_t holeCards[ MAX_PLAYERS ][ MAX_HOLE_CARDS ];
+
+  /* probability of cards of opponent */
+  double prob_oppo[52][52];
 } State;
 
 typedef struct {
