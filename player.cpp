@@ -35,13 +35,13 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
     num_pub = round + 2;
   }
   // the win_rate
-  double win_rate = eval_win_rate_uniform(game, state);
-  double win_rate_with_belief = eval_win_rate_with_belief(prob_oppo[52][52], game, state);
+  double win_rate = evalWinRateUniform(game, state);
+  double win_rate_with_belief = evalWinRateWithBelief(state->state.prob_oppo, game, state, rng, 100000);
   /* Define the probabilities of actions for the player */
-  ProbAct prob_act = eval_strategy(game, state, win_rate, rng);
-  probs[a_fold] = prob_act.prob_fold;
-  probs[a_call] = prob_act.prob_call;
-  probs[a_raise] = prob_act.prob_raise;
+  ProbAct prob_act = evalStrategy(game, state, win_rate, rng);
+  probs[ a_fold ] = prob_act.prob_fold;
+  probs[ a_call ] = prob_act.prob_call;
+  probs[ a_raise ] = prob_act.prob_raise;
 
   /* build the set of valid actions */
   double p = 0.0;
@@ -54,8 +54,8 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   action.type = a_fold;
   action.size = 0;
   if( isValidAction( game, &(state->state), 0, &action ) ) {
-    actionProbs[a_fold] = probs[a_fold];
-    p += probs[a_fold];
+    actionProbs[ a_fold ] = probs[ a_fold ];
+    p += probs[ a_fold ];
   }
 
   /* consider call */
@@ -103,6 +103,54 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   return action;
 }
 
+void updateBelief(double prob_oppo[52][52], Game *game, MatchState *state) {
+  uint8_t round = state->state.round;
+  uint8_t num_action = state->state.numActions[round];
+  size_t raise;
+  if (num_action == 0) { // I make first move in this round
+    
+  } else if (num_action == 1) {
+    if (state->state.action[round][0] == a_call) {
+      raise = 0;
+    } else { // a_raise
+      size_t last_bet = 0;
+      if (round != 0) for (uint8_t i = round - 1; i ;) {
+
+      }
+    }
+  } else {
+
+  }
+}
+
+int compareHands(uint8_t pri[2], uint8_t oppo[2], uint8_t pub[5]) {
+  Cardset cardset_pri = emptyCardset(), cardset_oppo = emptyCardset();
+  // add to private set
+  addCardToCardset(&cardset_pri, pri[0] % 4, pri[0] / 4);
+  addCardToCardset(&cardset_pri, pri[1] % 4, pri[1] / 4);
+  addCardToCardset(&cardset_pri, pub[0] % 4, pub[0] / 4);
+  addCardToCardset(&cardset_pri, pub[1] % 4, pub[1] / 4);
+  addCardToCardset(&cardset_pri, pub[2] % 4, pub[2] / 4);
+  addCardToCardset(&cardset_pri, pub[3] % 4, pub[3] / 4);
+  addCardToCardset(&cardset_pri, pub[4] % 4, pub[4] / 4);
+  // add to opponent's set
+  addCardToCardset(&cardset_oppo, oppo[0] % 4, oppo[0] / 4);
+  addCardToCardset(&cardset_oppo, oppo[1] % 4, oppo[1] / 4);
+  addCardToCardset(&cardset_oppo, pub[0] % 4, pub[0] / 4);
+  addCardToCardset(&cardset_oppo, pub[1] % 4, pub[1] / 4);
+  addCardToCardset(&cardset_oppo, pub[2] % 4, pub[2] / 4);
+  addCardToCardset(&cardset_oppo, pub[3] % 4, pub[3] / 4);
+  addCardToCardset(&cardset_oppo, pub[4] % 4, pub[4] / 4);
+  // compare
+  int rank_pri = rankCardset(cardset_pri), rank_oppo = rankCardset(cardset_oppo);
+  if (rank_pri == rank_oppo)
+    return 0;
+  else if (rank_pri < rank_oppo)
+    return -1;
+  else
+    return 1;
+}
+
 // TODO: check pre_flop prob.
 double pre_flop_win_rate[13][13] = {{0.85, 0.68, 0.67, 0.66, 0.66, 0.64, 0.63, 0.63, 0.62, 0.62, 0.61, 0.60, 0.59},
                                     {0.66, 0.83, 0.64, 0.64, 0.63, 0.61, 0.60, 0.59, 0.58, 0.58, 0.57, 0.56, 0.55},
@@ -119,7 +167,7 @@ double pre_flop_win_rate[13][13] = {{0.85, 0.68, 0.67, 0.66, 0.66, 0.64, 0.63, 0
                                     {0.57, 0.53, 0.49, 0.47, 0.44, 0.42, 0.40, 0.37, 0.37, 0.37, 0.36, 0.35, 0.51}};
 
 // TODO: check eval win rate
-double eval_win_rate_uniform(Game *game, MatchState *state) {
+double evalWinRateUniform(Game *game, MatchState *state) {
   const uint8_t num_pub = (state->state.round > 0) ? (state->state.round + 2) : 0; // number of public cards
   const uint8_t ID = state->viewingPlayer;
   bool card_use_flag[52] = {0};
@@ -227,8 +275,59 @@ double eval_win_rate_uniform(Game *game, MatchState *state) {
   return (tot == 0.0) ? 0.0 : double(win) / double(tot);
 }
 
+double evalWinRateWithBelief(double prob_oppo[52][52], Game *game, MatchState *state, rng_state_t *rng, size_t times_mc) {
+  const uint8_t num_pub = (state->state.round > 0) ? (state->state.round + 2) : 0; // number of public cards
+  const uint8_t ID = state->viewingPlayer;
+  // preflop
+  if (num_pub == 0) {
+    return evalWinRateUniform(game, state);
+  }
+  size_t win = 0; // tot is times_mc
+  uint8_t pri[2], pub[5], oppo[2];
+  // initialize cards
+  pri[0] = state->state.holeCards[ID][0], pri[1] = state->state.holeCards[ID][1];
+  for (uint8_t i = 0; i < num_pub; ++i) {
+    pub[i] = state->state.boardCards[i];
+  }
+  // Monte Carlo Sampling
+  for (size_t time = 0; time < times_mc; time++) {
+    double rand_real = genrand_real2(rng);
+    bool flag = false; // if the sampling is successful
+    // sample opponent's hand
+    for (uint8_t i = 1; i < 52; ++i) {
+      if (flag) break;
+      for (uint8_t j = 0; j < i; ++j) {
+        if (rand_real <= prob_oppo[i][j] + prob_oppo[j][i]) {
+          oppo[1] = i;
+          oppo[2] = j;
+          flag = true;
+          break;
+        }
+      }
+    }
+    assert(flag);
+    // sample public cards
+    for (uint8_t i = 0; i < 5 - num_pub; ++i) {
+      size_t rand_card = (genrand_int32(rng) % 48);
+      uint8_t j = 0;
+      while(true) {
+        if (j == pri[0] || j == pri[1] || j == oppo[0] || j == oppo[1]) {
+          j++;
+          continue;
+        }
+        if (j == rand_card) break;
+        j++;
+      }
+      pub[num_pub + i] = j;
+    }
+    int result = compareHands(pri, oppo, pub);
+    win += (result + 1);
+  }
+  return double(win) / (2 * times_mc);
+}
+
 // TODO: check strategy
-ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_t *rng) {
+ProbAct evalStrategy(Game *game, MatchState *state, double win_rate, rng_state_t *rng) {
   ProbAct prob_act;
   unsigned int pot = 0; // current total pot value
   for (uint8_t i = 0; i < game->numPlayers; ++i) {
@@ -294,8 +393,8 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
         action.type = a_fold;
         action.size = 0;
         if (isValidAction(game, &(state->state), 0, &action)) { // fold is valid
-          prob_act.prob_call = 1.0;
-          prob_act.prob_fold = 0.0;
+          prob_act.prob_call = (win_rate + 1.0) / 2;
+          prob_act.prob_fold = (1.0 - win_rate) / 2;
           prob_act.prob_raise = 0.0;
         } else {
           prob_act.prob_call = 1.0;
@@ -314,6 +413,11 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
         prob_act.prob_fold = 1 / (1 + 2 * exp(win_rate));
         prob_act.prob_raise = 2 * exp(win_rate) * win_rate / (1 + 2 * exp(win_rate));
         prob_act.prob_call = 1.0 - prob_act.prob_fold - prob_act.prob_raise;
+        if (win_rate < 0.40) {
+          prob_act.prob_call = 0.0;
+          prob_act.prob_fold = 1.0;
+          prob_act.prob_raise = 0.0;
+        }
       } else {
         prob_act.prob_fold = 0.0;
         prob_act.prob_raise = exp(win_rate - 2.0);
@@ -328,9 +432,14 @@ ProbAct eval_strategy(Game *game, MatchState *state, double win_rate, rng_state_
       action.type = a_fold;
       action.size = 0;
       if (isValidAction(game, &(state->state), 0, &action)) { // fold is valid
-        prob_act.prob_call = 1.0;
-        prob_act.prob_fold = 0.0;
+        prob_act.prob_call = exp(win_rate - 1.0);
+        prob_act.prob_fold = 1 - prob_act.prob_call;
         prob_act.prob_raise = 0.0;
+        if (win_rate < 0.40) {
+          prob_act.prob_call = 0.0;
+          prob_act.prob_fold = 1.0;
+          prob_act.prob_raise = 0.0;
+        }
       } else {
         prob_act.prob_call = 1.0;
         prob_act.prob_fold = 0.0;
