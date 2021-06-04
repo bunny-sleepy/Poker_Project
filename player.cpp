@@ -37,7 +37,7 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   updateBelief(state->state.prob_oppo, game, state, rng);
   // the win_rate
   // double win_rate = evalWinRateUniform(game, state);
-  double win_rate_with_belief = evalWinRateWithBelief(state->state.prob_oppo, game, state, rng, 200000);
+  double win_rate_with_belief = evalWinRateWithBelief(state->state.prob_oppo, game, state, rng, 300000);
   /* Define the probabilities of actions for the player */
   ProbAct prob_act = evalStrategy(game, state, win_rate_with_belief, rng);
   probs[ a_fold ] = prob_act.prob_fold;
