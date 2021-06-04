@@ -34,11 +34,12 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
     }
     num_pub = round + 2;
   }
+  updateBelief(state->state.prob_oppo, game, state, rng);
   // the win_rate
-  double win_rate = evalWinRateUniform(game, state);
+  // double win_rate = evalWinRateUniform(game, state);
   double win_rate_with_belief = evalWinRateWithBelief(state->state.prob_oppo, game, state, rng, 100000);
   /* Define the probabilities of actions for the player */
-  ProbAct prob_act = evalStrategy(game, state, win_rate, rng);
+  ProbAct prob_act = evalStrategy(game, state, win_rate_with_belief, rng);
   probs[ a_fold ] = prob_act.prob_fold;
   probs[ a_call ] = prob_act.prob_call;
   probs[ a_raise ] = prob_act.prob_raise;
@@ -88,8 +89,8 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   }
   action.type = (enum ActionType)a;
   if( a == a_raise ) {
-    // TODO: check if raise size < min
-    action.size = prob_act.raise_size; // this is a random raise
+    action.size = prob_act.raise_size;
+    // in case of invalid raise
     if (action.size > max) {
       action.size = max;
     } else if (action.size < min) {
@@ -103,23 +104,175 @@ Action act(Game *game, MatchState *state, rng_state_t *rng) {
   return action;
 }
 
-void updateBelief(double prob_oppo[52][52], Game *game, MatchState *state) {
+void updateBelief(double prob_oppo[52][52], Game *game, MatchState *state, rng_state_t *rng) {
+  uint8_t ID = state->viewingPlayer;
   uint8_t round = state->state.round;
   uint8_t num_action = state->state.numActions[round];
-  size_t raise;
+  size_t raise = 0;
+  unsigned int pot = 0; // current total pot value
+  for (uint8_t i = 0; i < game->numPlayers; ++i) {
+    pot += state->state.spent[i];
+  }
   if (num_action == 0) { // I make first move in this round
-    
-  } else if (num_action == 1) {
-    if (state->state.action[round][0] == a_call) {
+    if (round == 0 || state->state.actingPlayer[round - 1][state->state.numActions[round - 1] - 1] == ID)
       raise = 0;
-    } else { // a_raise
-      size_t last_bet = 0;
-      if (round != 0) for (uint8_t i = round - 1; i ;) {
-
+    else { // opponent calls last round
+      if (state->state.action[round - 1][state->state.numActions[round - 1] - 2].type == a_call)
+        raise = 0;
+      else {
+        size_t last_raise = game->blind[ID];
+        raise = state->state.action[round - 1][state->state.numActions[round - 1] - 2].size;
+        bool flag = false;
+        for (uint8_t j = state->state.numActions[round - 1] - 3; j >= 0; --j) {
+          if (state->state.action[round - 1][j].type == a_raise) {
+            last_raise = state->state.action[round - 1][j].size;
+            flag = true;
+            break;
+          }
+        }
+        if (!flag) for (uint8_t i = round - 2; i >= 0; --i) {
+          if (flag) break; 
+          for (uint8_t j = state->state.numActions[i] - 1; j >= 0; --j) {
+            if (state->state.action[i][j].type == a_raise) {
+              last_raise = state->state.action[i][j].size;
+              flag = true;
+              break;
+            }
+          }
+        }
+        raise = raise - last_raise;
+        raise /= 2;
       }
     }
-  } else {
+  } else if (num_action == 1) {
+    if (state->state.action[round][0].type == a_call) {
+      if (round == 0 || state->state.action[round - 1][state->state.numActions[round - 1] - 1].type == a_call)
+        raise = 0;
+      else {
+        size_t last_raise;
+        if (state->state.actingPlayer[round - 1][state->state.numActions[round - 1] - 1] == ID) {
+          last_raise = game->blind[ID];
+        } else {
+          last_raise = 150 - game->blind[ID];
+        }
+        raise = state->state.action[round - 1][state->state.numActions[round - 1] - 1].size;
+        bool flag = false;
+        for (uint8_t j = state->state.numActions[round - 1] - 2; j >= 0; --j) {
+          if (state->state.action[round - 1][j].type == a_raise) {
+            last_raise = state->state.action[round - 1][j].size;
+            flag = true;
+            break;
+          }
+        }
+        if (!flag) for (uint8_t i = round - 2; i >= 0; --i) {
+          if (flag) break;
+          for (uint8_t j = state->state.numActions[i] - 1; j >= 0; --j) {
+            if (state->state.action[i][j].type == a_raise) {
+              last_raise = state->state.action[i][j].size;
+              flag = true;
+              break;
+            }
+          }
+        }
+        raise = raise - last_raise;
+        raise /= 2;
+      }
+    } else { // a_raise
+      size_t last_raise = (game->blind[ID] == 100) ? 50 : 100;
+      bool flag = false;
+      // if (round == 0) {
+      //   flag = true;
 
+      // }
+      assert(round == 0);
+      for (uint8_t i = round - 1; i >= 0; --i) {
+        if (flag) break;
+        if (!flag) for (uint8_t j = state->state.numActions[i] - 1; j >= 0; --j) {
+          if (state->state.action[i][j].type == a_raise) {
+            last_raise = state->state.action[i][j].size;
+            flag = true;
+            break;
+          }
+        }
+      }
+      raise = state->state.action[round][0].size - last_raise;
+    }
+  } else {
+    if (state->state.action[round][num_action - 1].type == a_call) {
+      if (state->state.action[round][num_action - 2].type == a_call)
+        raise = 0;
+      else {
+        raise = state->state.action[round][num_action - 2].size;
+        size_t last_raise = game->blind[ID];
+        bool flag = false;
+        for (uint8_t j = state->state.numActions[round] - 3; j >= 0; --j) {
+          if (state->state.action[round][j].type == a_raise) {
+            last_raise = state->state.action[round][j].size;
+            flag = true;
+            break;
+          }
+        }
+        if (!flag) for (uint8_t i = round - 1; i >= 0; --i) {
+          if (flag) break;
+          for (uint8_t j = state->state.numActions[i] - 1; j >= 0; --j) {
+            if (state->state.action[i][j].type == a_raise) {
+              last_raise = state->state.action[i][j].size;
+              flag = true;
+              break;
+            }
+          }
+        }
+        raise = raise - last_raise;
+        raise /= 2;
+      }
+    } else { // a_raise
+      size_t last_raise = (game->blind[ID] == 100) ? 50 : 100;
+      bool flag = false;
+      for (uint8_t j = state->state.numActions[round] - 2; j >= 0; --j) {
+        if (state->state.action[round][j].type == a_raise) {
+          last_raise = state->state.action[round][j].size;
+          flag = true;
+          break;
+        }
+      }
+      if (!flag) for (uint8_t i = round - 1; i >= 0; --i) {
+        if (flag) break;
+        for (uint8_t j = state->state.numActions[i] - 1; j >= 0; --j) {
+          if (state->state.action[i][j].type == a_raise) {
+            last_raise = state->state.action[i][j].size;
+            flag = true;
+            break;
+          }
+        }
+      }
+      raise = state->state.action[round][0].size - last_raise;
+    }
+  }
+  // update according to ratio, if ratio = 0, we should not modify, and prob discounts as ratio increases
+  // here we choose exp(win_rate * ratio * alpha) as discount factor, then normalize
+  double ratio = double(raise) / pot;
+  double alpha = 1.0;
+  for (uint8_t i = 0; i < 52; ++i) {
+    for (uint8_t j = 0; j < i; ++j) {
+      uint8_t hand[2] = {i, j};
+      double win_rate = evalWinRateWithHand(game, state, hand, rng, 10000);
+      double discount_factor = exp(alpha * win_rate * ratio);
+      prob_oppo[i][j] *= discount_factor;
+      prob_oppo[j][i] *= discount_factor;
+    }
+  }
+  double sum = 0.0;
+  for (uint8_t i = 0; i < 52; ++i) {
+    for (uint8_t j = 0; j < i; ++j) {
+      sum += prob_oppo[i][j];
+    }
+  }
+  sum *= 2.0;
+  for (uint8_t i = 0; i < 52; ++i) {
+    for (uint8_t j = 0; j < i; ++j) {
+      prob_oppo[i][j] /= sum;
+      prob_oppo[j][i] /= sum;
+    }
   }
 }
 
@@ -165,6 +318,72 @@ double pre_flop_win_rate[13][13] = {{0.85, 0.68, 0.67, 0.66, 0.66, 0.64, 0.63, 0
                                     {0.59, 0.54, 0.51, 0.48, 0.46, 0.43, 0.42, 0.41, 0.41, 0.41, 0.58, 0.42, 0.40},
                                     {0.58, 0.54, 0.50, 0.48, 0.45, 0.43, 0.40, 0.39, 0.39, 0.39, 0.38, 0.55, 0.39},
                                     {0.57, 0.53, 0.49, 0.47, 0.44, 0.42, 0.40, 0.37, 0.37, 0.37, 0.36, 0.35, 0.51}};
+
+// TODO: check win rate
+double evalWinRateWithHand(Game *game, MatchState *state, uint8_t hand[2], rng_state_t *rng, size_t times_mc) {
+  const uint8_t num_pub = (state->state.round > 0) ? (state->state.round + 2) : 0; // number of public cards
+  const uint8_t ID = state->viewingPlayer;
+  // the total number of guesses and wins
+  size_t win = 0;
+  uint8_t curr_card_num = num_pub;
+  // init current info to the cardsets
+  uint8_t pri1 = hand[0], pri2 = hand[1];
+  
+  // pre-flop
+  if (state->state.round == 0) {
+    if (pri1 / 4 == pri2 / 4) {
+      return pre_flop_win_rate[12 - pri1 / 4][12 - pri1 / 4];
+    } else if (pri1 % 4 == pri2 % 4) {
+      if (pri1 / 4 < pri2 / 4) {
+        return pre_flop_win_rate[12 - pri2 / 4][12 - pri1 / 4];
+      } else {
+        return pre_flop_win_rate[12 - pri1 / 4][12 - pri2 / 4];
+      }
+    } else {
+      if (pri1 / 4 > pri2 / 4) {
+        return pre_flop_win_rate[12 - pri2 / 4][12 - pri1 / 4];
+      } else {
+        return pre_flop_win_rate[12 - pri1 / 4][12 - pri2 / 4];
+      }
+    }
+  }
+  uint8_t oppo[2], pub[5];
+  for (uint8_t i = 0; i < num_pub; ++i) {
+    pub[i] = state->state.boardCards[i];
+  }
+  // Monte Carlo Sampling
+  for (size_t time = 0; time < times_mc; time++) {
+    bool used[52] = {0};
+    used[hand[0]] = true;
+    used[hand[1]] = true;
+    for (uint8_t i = 0; i < num_pub; ++i) {
+      used[pub[i]] = true;
+    }
+    // sample opponent's hand
+    do {
+      double rand_real = genrand_real2(rng);
+      oppo[0] = uint8_t(52 * rand_real);
+      rand_real = genrand_real2(rng);
+      oppo[1] = uint8_t(52 * rand_real);
+      if (oppo[0] == oppo[1]) continue;
+    } while (!used[oppo[0]] && !used[oppo[1]]);
+
+    // sample public cards
+    used[oppo[0]] = true;
+    used[oppo[1]] = true;
+    for (uint8_t i = 0; i < 5 - num_pub; ++i) {
+      size_t rand_card = (genrand_int32(rng) % 52);
+      while (used[rand_card]) {
+        rand_card = genrand_int32(rng) % 52;
+      }
+      pub[num_pub + i] = rand_card;
+      used[rand_card] = true;
+    }
+    int result = compareHands(hand, oppo, pub);
+    win += (result + 1);
+  }
+  return double(win) / times_mc;
+}
 
 // TODO: check eval win rate
 double evalWinRateUniform(Game *game, MatchState *state) {
@@ -275,6 +494,7 @@ double evalWinRateUniform(Game *game, MatchState *state) {
   return (tot == 0.0) ? 0.0 : double(win) / double(tot);
 }
 
+// TODO: check correctness
 double evalWinRateWithBelief(double prob_oppo[52][52], Game *game, MatchState *state, rng_state_t *rng, size_t times_mc) {
   const uint8_t num_pub = (state->state.round > 0) ? (state->state.round + 2) : 0; // number of public cards
   const uint8_t ID = state->viewingPlayer;
@@ -291,34 +511,42 @@ double evalWinRateWithBelief(double prob_oppo[52][52], Game *game, MatchState *s
   }
   // Monte Carlo Sampling
   for (size_t time = 0; time < times_mc; time++) {
-    double rand_real = genrand_real2(rng);
-    bool flag = false; // if the sampling is successful
     // sample opponent's hand
-    for (uint8_t i = 1; i < 52; ++i) {
-      if (flag) break;
-      for (uint8_t j = 0; j < i; ++j) {
-        if (rand_real <= prob_oppo[i][j] + prob_oppo[j][i]) {
-          oppo[1] = i;
-          oppo[2] = j;
-          flag = true;
-          break;
-        }
-      }
+    bool used[52] = {0};
+    used[pri[0]] = true;
+    used[pri[1]] = true;
+    for (uint8_t i = 0; i < num_pub; ++i) {
+      used[pub[i]] = true;
     }
-    assert(flag);
-    // sample public cards
-    for (uint8_t i = 0; i < 5 - num_pub; ++i) {
-      size_t rand_card = (genrand_int32(rng) % 48);
-      uint8_t j = 0;
-      while(true) {
-        if (j == pri[0] || j == pri[1] || j == oppo[0] || j == oppo[1]) {
-          j++;
-          continue;
+    do {
+      double rand_real = genrand_real2(rng);
+      bool flag = false;
+      for (uint8_t i = 0; i < 52; ++i) {
+        if (flag) break;
+        for (uint8_t j = 0; j < i; ++j) {
+          double prob = prob_oppo[i][j] + prob_oppo[j][i];
+          if (rand_real <= prob) {
+            oppo[0] = i;
+            oppo[1] = j;
+            flag = true;
+            break;
+          }
+          rand_real -= prob;
         }
-        if (j == rand_card) break;
-        j++;
       }
-      pub[num_pub + i] = j;
+    } while (!used[oppo[0]] && !used[oppo[1]]);
+
+    // sample public cards
+    
+    used[oppo[0]] = true;
+    used[oppo[1]] = true;
+    for (uint8_t i = 0; i < 5 - num_pub; ++i) {
+      size_t rand_card = (genrand_int32(rng) % 52);
+      while (used[rand_card]) {
+        rand_card = genrand_int32(rng) % 52;
+      }
+      pub[num_pub + i] = rand_card;
+      used[rand_card] = true;
     }
     int result = compareHands(pri, oppo, pub);
     win += (result + 1);
@@ -477,7 +705,6 @@ int step(int len, char line[], Game *game, MatchState *state, rng_state_t *rng) 
 
   return len;
 }
-
 
 int main( int argc, char **argv ) {
   int sock, len;

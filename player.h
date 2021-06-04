@@ -25,10 +25,13 @@ typedef struct {
   double raise_size;
 } ProbAct;
 
-// updates belief
-double updateBelief(double prob_oppo[52][52], Game *game, MatchState *state);
+// update belief
+void updateBelief(double prob_oppo[52][52], Game *game, MatchState *state, rng_state_t *rng);
 
-// evaluates uniform win rate
+// evaluate win rate with hand
+double evalWinRateWithHand(Game *game, MatchState *state, uint8_t hand[2], rng_state_t *rng, size_t times_mc);
+
+// evaluate uniform win rate
 double evalWinRateUniform(Game *game, MatchState *state);
 
 // evaluate win rate with opponent's action
